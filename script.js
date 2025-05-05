@@ -400,15 +400,16 @@ document.addEventListener('DOMContentLoaded', function () {
         function findMatchesWithContext(content, searchTerm) {
             const matches = [];
             const lowerContent = content.toLowerCase();
+            const searchTermLower = searchTerm.toLowerCase();
             const contextLength = 100; // Characters of context before and after match
 
             let startPos = 0;
             let pos;
 
-            while ((pos = lowerContent.indexOf(searchTerm, startPos)) !== -1) {
+            while ((pos = lowerContent.indexOf(searchTermLower, startPos)) !== -1) {
                 // Get context around match
                 const contextStart = Math.max(0, pos - contextLength);
-                const contextEnd = Math.min(content.length, pos + searchTerm.length + contextLength);
+                const contextEnd = Math.min(content.length, pos + searchTermLower.length + contextLength);
                 let context = content.substring(contextStart, contextEnd);
 
                 // Add ellipsis if needed
@@ -416,15 +417,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (contextEnd < content.length) context = context + '...';
 
                 // Calculate position of match within context
-                const matchPosInContext = pos - contextStart;
+                const matchPosInContext = pos - contextStart + (contextStart > 0 ? 3 : 0); // Adjust for ellipsis
 
                 matches.push({
                     context: context,
                     matchPos: matchPosInContext,
-                    matchLength: searchTerm.length
+                    matchLength: content.substring(pos, pos + searchTermLower.length).length, // Use actual case from content
+                    position: pos // Store original position for scrolling
                 });
 
-                startPos = pos + searchTerm.length;
+                startPos = pos + searchTermLower.length;
             }
 
             return matches;
@@ -457,21 +459,24 @@ document.addEventListener('DOMContentLoaded', function () {
                         <ul class="match-list">
                 `;
 
-                for (const match of result.matches) {
+                for (let i = 0; i < result.matches.length; i++) {
+                    const match = result.matches[i];
                     // Highlight the match in the context
                     const beforeMatch = match.context.substring(0, match.matchPos);
                     const matchText = match.context.substring(match.matchPos, match.matchPos + match.matchLength);
                     const afterMatch = match.context.substring(match.matchPos + match.matchLength);
 
                     html += `
-                        <li class="match-context">${beforeMatch}<span class="search-highlight">${matchText}</span>${afterMatch}</li>
+                        <li class="match-context" data-path="${result.chapter.path}" data-position="${match.position}" data-index="${i}">
+                            ${beforeMatch}<span class="search-highlight">${matchText}</span>${afterMatch}
+                        </li>
                     `;
                 }
 
                 html += `
-                    </ul>
-                </div>
-            `;
+                        </ul>
+                    </div>
+                `;
             }
 
             contentDiv.innerHTML = html;
@@ -506,6 +511,143 @@ document.addEventListener('DOMContentLoaded', function () {
                     window.location.hash = id;
                 });
             });
+
+            // Add click handlers to match contexts
+            document.querySelectorAll('.match-context').forEach(matchItem => {
+                matchItem.addEventListener('click', function () {
+                    const path = this.dataset.path;
+                    const position = parseInt(this.dataset.position);
+                    const matchIndex = parseInt(this.dataset.index);
+
+                    // Load the chapter and scroll to the match position
+                    loadChapterAndScrollToMatch(path, position, matchIndex);
+                });
+
+                // Add cursor pointer to indicate clickable
+                matchItem.style.cursor = 'pointer';
+            });
+        }
+
+        // Function to load chapter and scroll to match
+        function loadChapterAndScrollToMatch(path, position, matchIndex) {
+            fetch(path)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.text();
+                })
+                .then(markdown => {
+                    // Parse markdown to HTML
+                    const html = marked.parse(markdown);
+                    document.getElementById('markdown-content').innerHTML = html;
+
+                    // Process any mermaid diagrams
+                    if (typeof mermaid !== 'undefined') {
+                        mermaid.init(undefined, document.querySelectorAll('.language-mermaid'));
+                    }
+
+                    // Find the match in the rendered content
+                    const contentText = document.getElementById('markdown-content').textContent;
+
+                    // Try to find a close approximation of where to scroll
+                    // This is challenging because markdown-to-HTML conversion changes character positions
+                    setTimeout(() => {
+                        highlightAndScrollToMatch(contentText, position, matchIndex);
+                    }, 100);
+
+                    // Add link handling for internal markdown links
+                    document.querySelectorAll('#markdown-content a').forEach(link => {
+                        // ... existing link handling code ...
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading chapter:', error);
+                    document.getElementById('markdown-content').innerHTML = `
+                        <div class="error">
+                            <h2>Error Loading Content</h2>
+                            <p>Could not load the requested chapter. Please check if the file exists at: ${path}</p>
+                        </div>
+                    `;
+                });
+        }
+
+        // Function to highlight and scroll to match in rendered content
+        function highlightAndScrollToMatch(contentText, originalPosition, matchIndex) {
+            // Get all text nodes in the content
+            const contentDiv = document.getElementById('markdown-content');
+            const textNodes = [];
+
+            function collectTextNodes(node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    textNodes.push(node);
+                } else {
+                    for (const child of node.childNodes) {
+                        collectTextNodes(child);
+                    }
+                }
+            }
+
+            collectTextNodes(contentDiv);
+
+            // Try to find the approximate position
+            let currentPos = 0;
+            let targetNode = null;
+            let targetOffset = 0;
+
+            for (const node of textNodes) {
+                const nodeLength = node.textContent.length;
+
+                if (currentPos <= originalPosition && originalPosition < currentPos + nodeLength) {
+                    targetNode = node;
+                    targetOffset = originalPosition - currentPos;
+                    break;
+                }
+
+                currentPos += nodeLength;
+            }
+
+            if (targetNode) {
+                // Create a range to select the text
+                const range = document.createRange();
+                const searchTerm = document.querySelector('.search-highlight').textContent;
+
+                // Try to find the exact match
+                const nodeText = targetNode.textContent;
+                let matchPos = nodeText.toLowerCase().indexOf(searchTerm.toLowerCase(), targetOffset);
+
+                if (matchPos === -1) {
+                    // If not found at expected position, search the entire node
+                    matchPos = nodeText.toLowerCase().indexOf(searchTerm.toLowerCase());
+                }
+
+                if (matchPos !== -1) {
+                    // Create a highlight span
+                    const highlightSpan = document.createElement('span');
+                    highlightSpan.className = 'search-highlight in-content';
+                    highlightSpan.id = `match-${matchIndex}`;
+
+                    try {
+                        range.setStart(targetNode, matchPos);
+                        range.setEnd(targetNode, matchPos + searchTerm.length);
+
+                        // Replace the text with our highlighted span
+                        range.deleteContents();
+                        range.insertNode(highlightSpan);
+
+                        // Add the text to the span
+                        highlightSpan.textContent = searchTerm;
+
+                        // Scroll to the highlight
+                        highlightSpan.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center'
+                        });
+                    } catch (e) {
+                        console.error('Error highlighting text:', e);
+                    }
+                }
+            }
         }
 
         // Add event listeners
