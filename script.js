@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', function () {
             // Define known tutorial directories to check
             // This list can be expanded as needed
             const directoriesToCheck = [
-                'BuergelCheck',
                 'sw.administration',
                 'sw.storefront'
                 // Add other directories as needed
@@ -74,94 +73,65 @@ document.addEventListener('DOMContentLoaded', function () {
                 title: 'Tutorial Overview',
                 path: `output/${dir}/index.md`
             });
-        }
 
-        // Try to fetch a list of files
-        // In a real implementation, this would be a server-side generated JSON file
-        // For now, we'll try to fetch files with common patterns
+            // For each directory, we'll check for specific chapter files based on the directory
+            if (dir === 'sw.storefront') {
+                // Storefront chapters
+                const storefrontChapters = [
+                    { num: 1, title: 'Storefront Routing (RequestTransformer, Router)', file: '01_storefront_routing__requesttransformer__router__.md' },
+                    { num: 2, title: 'Theme System (ThemeService, ThemeCompiler, StorefrontPluginConfiguration)', file: '02_theme_system__themeservice__themecompiler__storefrontpluginconfiguration__.md' },
+                    { num: 3, title: 'StorefrontController', file: '03_storefrontcontroller_.md' },
+                    { num: 4, title: 'Page / PageLoader Pattern', file: '04_page___pageloader_pattern_.md' },
+                    { num: 5, title: 'Pagelet / PageletLoader Pattern', file: '05_pagelet___pageletloader_pattern_.md' },
+                    { num: 6, title: 'Captcha Abstraction', file: '06_captcha_abstraction_.md' },
+                    { num: 7, title: 'RouteRequestEvent', file: '07_routerequestevent_.md' },
+                    { num: 8, title: 'PageLoadedHook', file: '08_pageloadedhook_.md' }
+                ];
 
-        // Common patterns for chapter files
-        const patterns = [
-            { regex: /^(\d+)_(.+)\.md$/, titleFormat: (num, name) => `${parseInt(num)}. ${formatTitle(name)}` },
-            { regex: /^chapter(\d+)_(.+)\.md$/, titleFormat: (num, name) => `${parseInt(num)}. ${formatTitle(name)}` }
-        ];
-
-        // For each potential chapter number
-        for (let i = 1; i <= 20; i++) { // Assume max 20 chapters
-            const paddedNum = i.toString().padStart(2, '0');
-
-            // Try different filename patterns
-            const filesToTry = [
-                `${paddedNum}_*.md`,
-                `${i}_*.md`,
-                `chapter${i}_*.md`
-            ];
-
-            for (const filePattern of filesToTry) {
-                try {
-                    // In a real implementation, we would get a list of files
-                    // For now, we'll try specific common filenames
-
-                    // Examples of specific files to try
-                    const specificFiles = [
-                        `output/${dir}/${paddedNum}_configuration_management_.md`,
-                        `output/${dir}/${paddedNum}_storefront_routing__requesttransformer__router__.md`,
-                        `output/${dir}/${paddedNum}_theme_system__themeservice__themecompiler__storefrontpluginconfiguration__.md`,
-                        `output/${dir}/${paddedNum}_storefrontcontroller_.md`,
-                        `output/${dir}/${paddedNum}_page___pageloader_pattern_.md`,
-                        `output/${dir}/${paddedNum}_pagelet___pageletloader_pattern_.md`,
-                        `output/${dir}/${paddedNum}_captcha_abstraction_.md`,
-                        `output/${dir}/${paddedNum}_routerequestevent_.md`,
-                        `output/${dir}/${paddedNum}_pageloadedhook_.md`,
-                        `output/${dir}/${paddedNum}_admin_asset_management___build_process_.md`,
-                        `output/${dir}/${paddedNum}_snippet_management_.md`,
-                        `output/${dir}/${paddedNum}_administration_bundle_.md`,
-                        `output/${dir}/${paddedNum}_user_configuration_service_.md`
-                    ];
-
-                    for (const filePath of specificFiles) {
-                        try {
-                            const response = await fetch(filePath);
-                            if (response.ok) {
-                                // Extract title from filename
-                                const fileName = filePath.split('/').pop();
-                                let title = `Chapter ${i}`;
-
-                                // Try to extract a better title from the filename
-                                for (const pattern of patterns) {
-                                    const match = fileName.match(pattern.regex);
-                                    if (match) {
-                                        title = pattern.titleFormat(match[1], match[2]);
-                                        break;
-                                    }
-                                }
-
-                                // If we couldn't extract from filename, try to get from content
-                                if (title === `Chapter ${i}`) {
-                                    const content = await response.text();
-                                    const titleMatch = content.match(/^#\s+(.+)$/m);
-                                    if (titleMatch) {
-                                        title = `${i}. ${titleMatch[1]}`;
-                                    }
-                                }
-
-                                chapters.push({
-                                    id: `${dir.toLowerCase()}-ch${i}`,
-                                    title: title,
-                                    path: filePath
-                                });
-
-                                // Found a file for this chapter number, move to next number
-                                break;
-                            }
-                        } catch (e) {
-                            // Continue to next file
+                for (const chapter of storefrontChapters) {
+                    const chapterPath = `output/${dir}/${chapter.file}`;
+                    try {
+                        const response = await fetch(chapterPath);
+                        if (response.ok) {
+                            chapters.push({
+                                id: `${dir.toLowerCase()}-ch${chapter.num}`,
+                                title: `${chapter.num}. ${chapter.title}`,
+                                path: chapterPath
+                            });
                         }
+                    } catch (e) {
+                        console.warn(`Could not fetch chapter: ${chapterPath}`, e);
                     }
-                } catch (error) {
-                    // Just continue if we can't find this pattern
+                }
+            } else if (dir === 'sw.administration') {
+                // Administration chapters
+                const adminChapters = [
+                    { num: 1, title: 'Administration Bundle', file: '01_administration_bundle_.md' },
+                    { num: 2, title: 'Administration Controllers', file: '02_administration_controllers_.md' },
+                    { num: 3, title: 'Admin Search Service', file: '03_admin_search_service_.md' },
+                    { num: 4, title: 'Snippet Management', file: '04_snippet_management_.md' },
+                    { num: 5, title: 'User Configuration Service', file: '05_user_configuration_service_.md' },
+                    { num: 6, title: 'Admin Extension API & App Interaction', file: '06_admin_extension_api___app_interaction_.md' },
+                    { num: 7, title: 'Admin Asset Management & Build Process', file: '07_admin_asset_management___build_process_.md' }
+                ];
+
+                for (const chapter of adminChapters) {
+                    const chapterPath = `output/${dir}/${chapter.file}`;
+                    try {
+                        const response = await fetch(chapterPath);
+                        if (response.ok) {
+                            chapters.push({
+                                id: `${dir.toLowerCase()}-ch${chapter.num}`,
+                                title: `${chapter.num}. ${chapter.title}`,
+                                path: chapterPath
+                            });
+                        }
+                    } catch (e) {
+                        console.warn(`Could not fetch chapter: ${chapterPath}`, e);
+                    }
                 }
             }
+            // Add more directory-specific chapters as needed
         }
 
         // Sort chapters by their number
