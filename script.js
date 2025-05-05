@@ -338,6 +338,185 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // Add search functionality
+    function setupSearch() {
+        const searchInput = document.getElementById('search-input');
+        const searchButton = document.getElementById('search-button');
+
+        // Function to perform search
+        function performSearch() {
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            if (!searchTerm) return;
+
+            // Show loading indicator
+            document.getElementById('markdown-content').innerHTML = `
+                <div class="loading">
+                    <h2>Searching...</h2>
+                    <p>Looking for "${searchTerm}" in all tutorials.</p>
+                </div>
+            `;
+
+            // Collect all chapters to search
+            const allChapters = [];
+            for (const groupName in tutorialGroups) {
+                allChapters.push(...tutorialGroups[groupName]);
+            }
+
+            // Search through all chapters
+            searchInChapters(searchTerm, allChapters);
+        }
+
+        // Search in all chapters
+        async function searchInChapters(searchTerm, chapters) {
+            const results = [];
+
+            for (const chapter of chapters) {
+                try {
+                    const response = await fetch(chapter.path);
+                    if (response.ok) {
+                        const content = await response.text();
+
+                        // Check if search term exists in content
+                        if (content.toLowerCase().includes(searchTerm)) {
+                            // Find the context around matches
+                            const matches = findMatchesWithContext(content, searchTerm);
+
+                            results.push({
+                                chapter: chapter,
+                                matches: matches
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`Error searching in ${chapter.path}:`, error);
+                }
+            }
+
+            // Display results
+            displaySearchResults(searchTerm, results);
+        }
+
+        // Find matches with surrounding context
+        function findMatchesWithContext(content, searchTerm) {
+            const matches = [];
+            const lowerContent = content.toLowerCase();
+            const contextLength = 100; // Characters of context before and after match
+
+            let startPos = 0;
+            let pos;
+
+            while ((pos = lowerContent.indexOf(searchTerm, startPos)) !== -1) {
+                // Get context around match
+                const contextStart = Math.max(0, pos - contextLength);
+                const contextEnd = Math.min(content.length, pos + searchTerm.length + contextLength);
+                let context = content.substring(contextStart, contextEnd);
+
+                // Add ellipsis if needed
+                if (contextStart > 0) context = '...' + context;
+                if (contextEnd < content.length) context = context + '...';
+
+                // Calculate position of match within context
+                const matchPosInContext = pos - contextStart;
+
+                matches.push({
+                    context: context,
+                    matchPos: matchPosInContext,
+                    matchLength: searchTerm.length
+                });
+
+                startPos = pos + searchTerm.length;
+            }
+
+            return matches;
+        }
+
+        // Display search results
+        function displaySearchResults(searchTerm, results) {
+            const contentDiv = document.getElementById('markdown-content');
+
+            if (results.length === 0) {
+                contentDiv.innerHTML = `
+                    <div class="no-results">
+                        <h2>No Results Found</h2>
+                        <p>Your search for "${searchTerm}" did not match any content in the tutorials.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Build results HTML
+            let html = `
+                <h1>Search Results for "${searchTerm}"</h1>
+                <p>Found matches in ${results.length} chapter(s).</p>
+            `;
+
+            for (const result of results) {
+                html += `
+                    <div class="search-result">
+                        <h2><a href="#${result.chapter.id}" class="chapter-link" data-path="${result.chapter.path}">${result.chapter.title}</a></h2>
+                        <ul class="match-list">
+                `;
+
+                for (const match of result.matches) {
+                    // Highlight the match in the context
+                    const beforeMatch = match.context.substring(0, match.matchPos);
+                    const matchText = match.context.substring(match.matchPos, match.matchPos + match.matchLength);
+                    const afterMatch = match.context.substring(match.matchPos + match.matchLength);
+
+                    html += `
+                        <li class="match-context">${beforeMatch}<span class="search-highlight">${matchText}</span>${afterMatch}</li>
+                    `;
+                }
+
+                html += `
+                    </ul>
+                </div>
+            `;
+            }
+
+            contentDiv.innerHTML = html;
+
+            // Add click handlers to chapter links
+            document.querySelectorAll('.chapter-link').forEach(link => {
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const path = this.dataset.path;
+                    const id = this.getAttribute('href').substring(1);
+
+                    // Load the chapter
+                    loadChapter(path);
+
+                    // Update active state in sidebar
+                    document.querySelectorAll('#chapter-list a').forEach(sidebarLink => {
+                        sidebarLink.classList.remove('active');
+                        if (sidebarLink.getAttribute('href') === `#${id}`) {
+                            sidebarLink.classList.add('active');
+
+                            // Ensure parent group is expanded
+                            const parentGroup = sidebarLink.closest('.tutorial-group-chapters');
+                            if (parentGroup && parentGroup.classList.contains('collapsed')) {
+                                parentGroup.classList.remove('collapsed');
+                                const toggleIcon = parentGroup.previousElementSibling.querySelector('.toggle-icon');
+                                toggleIcon.textContent = '▼';
+                            }
+                        }
+                    });
+
+                    // Update URL hash
+                    window.location.hash = id;
+                });
+            });
+        }
+
+        // Add event listeners
+        searchButton.addEventListener('click', performSearch);
+        searchInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+    }
+
     // Initialize the application
     async function init() {
         // Add support for mermaid diagrams
@@ -359,6 +538,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (success) {
             // Populate sidebar with the discovered tutorials
             populateSidebar();
+
+            // Setup search functionality
+            setupSearch();
 
             // Initialize mermaid if loaded
             if (typeof mermaid !== 'undefined') {
