@@ -610,7 +610,9 @@ document.addEventListener('DOMContentLoaded', function () {
             if (targetNode) {
                 // Create a range to select the text
                 const range = document.createRange();
-                const searchTerm = document.querySelector('.search-highlight').textContent;
+
+                // Get the search term from the search input instead of relying on existing highlight
+                const searchTerm = document.getElementById('search-input').value.trim();
 
                 // Try to find the exact match
                 const nodeText = targetNode.textContent;
